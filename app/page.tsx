@@ -1,101 +1,161 @@
-import Image from "next/image";
+"use client";
+import { useState, useEffect } from "react";
+import {
+  LineChart,
+  Line,
+  BarChart,
+  Bar,
+  XAxis,
+  YAxis,
+  Tooltip,
+  CartesianGrid,
+  Legend,
+} from "recharts";
+import Papa from "papaparse";
 
-export default function Home() {
+interface VisitorData {
+  date?: string;
+  week?: string;
+  month?: string;
+  visitors: number;
+  [key: string]: string | number | undefined;
+}
+
+export default function VisitorAnalysis() {
+  const [data, setData] = useState<VisitorData[]>([]);
+  const [weeklyData, setWeeklyData] = useState<VisitorData[]>([]);
+  const [monthlyData, setMonthlyData] = useState<VisitorData[]>([]);
+  const [visitorTypeData, setVisitorTypeData] = useState<VisitorData[]>([]);
+  const [isClient, setIsClient] = useState(false);
+
+  useEffect(() => {
+    setIsClient(true);
+  }, []);
+
+  const handleFileUpload = (event: React.ChangeEvent<HTMLInputElement>) => {
+    const file = event.target.files?.[0];
+    if (file) {
+      Papa.parse(file, {
+        header: true,
+        dynamicTyping: true,
+        complete: (result) => {
+          processData(result.data);
+        },
+      });
+    }
+  };
+
+  // eslint-disable-next-line @typescript-eslint/no-explicit-any
+  const processData = (parsedData: any[]) => {
+    const dailyData: Record<string, number> = {};
+    const weeklyDataMap: Record<string, number> = {};
+    const monthlyDataMap: Record<string, number> = {};
+    const visitorTypeMap: Record<string, Record<string, number>> = {};
+
+    parsedData.forEach((row) => {
+      const date = row["Date"];
+      const visitors = row["Number of Visitors"] || 0;
+      const visitorType = row["Visitor Type"];
+      const month = date?.slice(0, 7) || "";
+      const week = date
+        ? `${date.slice(0, 4)}-W${Math.ceil(parseInt(date.slice(8, 10)) / 7)}`
+        : "";
+
+      if (date) dailyData[date] = (dailyData[date] || 0) + visitors;
+      if (week) weeklyDataMap[week] = (weeklyDataMap[week] || 0) + visitors;
+      if (month)
+        monthlyDataMap[month] = (monthlyDataMap[month] || 0) + visitors;
+      if (month && visitorType) {
+        if (!visitorTypeMap[month]) visitorTypeMap[month] = {};
+        visitorTypeMap[month][visitorType] =
+          (visitorTypeMap[month][visitorType] || 0) + visitors;
+      }
+    });
+
+    setData(
+      Object.entries(dailyData).map(([date, visitors]) => ({ date, visitors }))
+    );
+    setWeeklyData(
+      Object.entries(weeklyDataMap).map(([week, visitors]) => ({
+        week,
+        visitors,
+      }))
+    );
+    setMonthlyData(
+      Object.entries(monthlyDataMap).map(([month, visitors]) => ({
+        month,
+        visitors,
+      }))
+    );
+    setVisitorTypeData(
+      Object.entries(visitorTypeMap).map(([month, types]) => ({
+        month,
+        visitors: Object.values(types).reduce((a, b) => a + b, 0),
+        ...types,
+      }))
+    );
+  };
+
+  if (!isClient) return null;
+
   return (
-    <div className="grid grid-rows-[20px_1fr_20px] items-center justify-items-center min-h-screen p-8 pb-20 gap-16 sm:p-20 font-[family-name:var(--font-geist-sans)]">
-      <main className="flex flex-col gap-8 row-start-2 items-center sm:items-start">
-        <Image
-          className="dark:invert"
-          src="/next.svg"
-          alt="Next.js logo"
-          width={180}
-          height={38}
-          priority
-        />
-        <ol className="list-inside list-decimal text-sm text-center sm:text-left font-[family-name:var(--font-geist-mono)]">
-          <li className="mb-2">
-            Get started by editing{" "}
-            <code className="bg-black/[.05] dark:bg-white/[.06] px-1 py-0.5 rounded font-semibold">
-              app/page.tsx
-            </code>
-            .
-          </li>
-          <li>Save and see your changes instantly.</li>
-        </ol>
-
-        <div className="flex gap-4 items-center flex-col sm:flex-row">
-          <a
-            className="rounded-full border border-solid border-transparent transition-colors flex items-center justify-center bg-foreground text-background gap-2 hover:bg-[#383838] dark:hover:bg-[#ccc] text-sm sm:text-base h-10 sm:h-12 px-4 sm:px-5"
-            href="https://vercel.com/new?utm_source=create-next-app&utm_medium=appdir-template-tw&utm_campaign=create-next-app"
-            target="_blank"
-            rel="noopener noreferrer"
-          >
-            <Image
-              className="dark:invert"
-              src="/vercel.svg"
-              alt="Vercel logomark"
-              width={20}
-              height={20}
-            />
-            Deploy now
-          </a>
-          <a
-            className="rounded-full border border-solid border-black/[.08] dark:border-white/[.145] transition-colors flex items-center justify-center hover:bg-[#f2f2f2] dark:hover:bg-[#1a1a1a] hover:border-transparent text-sm sm:text-base h-10 sm:h-12 px-4 sm:px-5 sm:min-w-44"
-            href="https://nextjs.org/docs?utm_source=create-next-app&utm_medium=appdir-template-tw&utm_campaign=create-next-app"
-            target="_blank"
-            rel="noopener noreferrer"
-          >
-            Read our docs
-          </a>
+    <div className="text-center">
+      <h1 className="text-2xl font-semibold">
+        Draco National Park Visitor Analysis Dashboard
+      </h1>
+      <input
+        type="file"
+        accept=".csv"
+        onChange={handleFileUpload}
+        className="mb-2 p-2 border rounded-md shadow-sm"
+      />
+      <div className="grid grid-cols-1 md:grid-cols-2 gap-2 w-full">
+        <div className="p-4 bg-white shadow-md">
+          <h2 className="text-lg font-semibold mb-2">Daily Visitors</h2>
+          <LineChart width={700} height={300} data={data}>
+            <XAxis dataKey="date" />
+            <YAxis />
+            <Tooltip />
+            <CartesianGrid strokeDasharray="3 3" />
+            <Line type="monotone" dataKey="visitors" stroke="#8884d8" />
+          </LineChart>
         </div>
-      </main>
-      <footer className="row-start-3 flex gap-6 flex-wrap items-center justify-center">
-        <a
-          className="flex items-center gap-2 hover:underline hover:underline-offset-4"
-          href="https://nextjs.org/learn?utm_source=create-next-app&utm_medium=appdir-template-tw&utm_campaign=create-next-app"
-          target="_blank"
-          rel="noopener noreferrer"
-        >
-          <Image
-            aria-hidden
-            src="/file.svg"
-            alt="File icon"
-            width={16}
-            height={16}
-          />
-          Learn
-        </a>
-        <a
-          className="flex items-center gap-2 hover:underline hover:underline-offset-4"
-          href="https://vercel.com/templates?framework=next.js&utm_source=create-next-app&utm_medium=appdir-template-tw&utm_campaign=create-next-app"
-          target="_blank"
-          rel="noopener noreferrer"
-        >
-          <Image
-            aria-hidden
-            src="/window.svg"
-            alt="Window icon"
-            width={16}
-            height={16}
-          />
-          Examples
-        </a>
-        <a
-          className="flex items-center gap-2 hover:underline hover:underline-offset-4"
-          href="https://nextjs.org?utm_source=create-next-app&utm_medium=appdir-template-tw&utm_campaign=create-next-app"
-          target="_blank"
-          rel="noopener noreferrer"
-        >
-          <Image
-            aria-hidden
-            src="/globe.svg"
-            alt="Globe icon"
-            width={16}
-            height={16}
-          />
-          Go to nextjs.org →
-        </a>
-      </footer>
+        <div className="p-4 bg-white  shadow-md">
+          <h2 className="text-lg font-semibold mb-2">Weekly Visitors</h2>
+          <LineChart width={700} height={300} data={weeklyData}>
+            <XAxis dataKey="week" />
+            <YAxis />
+            <Tooltip />
+            <CartesianGrid strokeDasharray="3 3" />
+            <Line type="monotone" dataKey="visitors" stroke="#82ca9d" />
+          </LineChart>
+        </div>
+        <div className="p-4 bg-white  shadow-md">
+          <h2 className="text-lg font-semibold mb-2">Monthly Visitors</h2>
+          <LineChart width={700} height={300} data={monthlyData}>
+            <XAxis dataKey="month" />
+            <YAxis />
+            <Tooltip />
+            <CartesianGrid strokeDasharray="3 3" />
+            <Line type="monotone" dataKey="visitors" stroke="#ff7300" />
+          </LineChart>
+        </div>
+        <div className="p-4 bg-white  shadow-md">
+          <h2 className="text-lg font-semibold mb-2">
+            Visitor Counts Per Type Per Month
+          </h2>
+          <BarChart width={700} height={300} data={visitorTypeData}>
+            <XAxis dataKey="month" />
+            <YAxis />
+            <Tooltip />
+            <Legend />
+            <CartesianGrid strokeDasharray="3 3" />
+            <Bar dataKey="One-day visit" fill="#8884d8" />
+            <Bar dataKey="Camping" fill="#82ca9d" />
+            <Bar dataKey="RV Center" fill="#ff7300" />
+          </BarChart>
+        </div>
+      </div>
     </div>
   );
 }
